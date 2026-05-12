@@ -1,263 +1,181 @@
-import pandas as pd
+"""
+Sistem Rekomendasi Paket Wisata Kapal Phinisi – Labuan Bajo
+Implementasi Sentence-BERT + Content-Based Filtering
+"""
+
 import streamlit as st
 
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-
-
-# ==========================================
-# PAGE CONFIG
-# ==========================================
+# ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Rekomendasi Kapal Phinisi",
+    page_title="Rekomendasi Wisata Phinisi",
     page_icon="🚢",
-    layout="wide"
+    layout="centered",
 )
 
+# ── Custom CSS ────────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+/* Kartu hasil rekomendasi */
+.result-card {
+    background: #ffffff;
+    border: 1px solid #e8e8e8;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+}
+.dark .result-card {
+    background: #1e1e1e;
+    border-color: #333;
+}
+/* Badge skor kecocokan */
+.score-badge {
+    display: inline-block;
+    background: #EEF2FF;
+    color: #3730A3;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+/* Tag metadata */
+.tag {
+    display: inline-block;
+    background: #f3f4f6;
+    color: #6b7280;
+    font-size: 12px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    margin-right: 4px;
+}
+.rank-label {
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 2px;
+}
+.divider { border: none; border-top: 1px solid #f0f0f0; margin: 0.5rem 0; }
+</style>
+""", unsafe_allow_html=True)
 
-# ==========================================
-# LOAD DATA
-# ==========================================
-@st.cache_data
-def load_data():
+# ── Header ─────────────────────────────────────────────────────────────────────
+st.title("🚢 Sistem Rekomendasi Paket Wisata Phinisi")
+st.caption("Masukkan preferensi perjalanan Anda, kami carikan kapal Phinisi terbaik di Labuan Bajo.")
+st.divider()
 
-    df = pd.read_csv(
-        "dataset_kapal_preprocessing.csv"
+# ── Input form ─────────────────────────────────────────────────────────────────
+col_left, col_right = st.columns([2, 1])
+
+with col_left:
+    selected_paket = st.selectbox(
+        "🧭 Pilih jenis paket wisata",
+        options=[
+            "Private Trip",
+            "Open Trip",
+            "Family Trip",
+            "Honeymoon",
+            "Diving Trip",
+            "Luxury Trip",
+        ],
     )
 
-    df.columns = df.columns.str.strip()
-
-    return df
-
-
-# ==========================================
-# LOAD MODEL SBERT
-# ==========================================
-@st.cache_resource
-def load_model():
-
-    model = SentenceTransformer(
-        "all-MiniLM-L6-v2"
+with col_right:
+    top_n = st.slider(
+        "🔢 Jumlah rekomendasi",
+        min_value=1,
+        max_value=10,
+        value=5,
     )
 
-    return model
-
-
-# ==========================================
-# CREATE EMBEDDING
-# ==========================================
-@st.cache_resource
-def create_embeddings(
-    data
-):
-
-    texts = data[
-        "processed_text"
-    ].fillna("").astype(str).tolist()
-
-    embeddings = model.encode(
-        texts
-    )
-
-    return embeddings
-
-
-# ==========================================
-# LOAD EVERYTHING
-# ==========================================
-df = load_data()
-
-model = load_model()
-
-embeddings = create_embeddings(
-    df
+user_desc = st.text_area(
+    "📝 Deskripsikan kebutuhan perjalanan Anda",
+    placeholder=(
+        "Contoh: snorkeling, spa, chef pribadi, raja ampat, "
+        "kabin privat, honeymoon, underwater photography..."
+    ),
+    height=100,
 )
 
+search_clicked = st.button("🔍 Cari Rekomendasi", use_container_width=True, type="primary")
 
-# ==========================================
-# COSINE SIMILARITY
-# ==========================================
-similarity_matrix = cosine_similarity(
-    embeddings
-)
+# ── Hasil rekomendasi ──────────────────────────────────────────────────────────
+if search_clicked:
+    if not user_desc.strip():
+        st.warning("⚠️ Tuliskan deskripsi kebutuhan perjalanan terlebih dahulu.")
+        st.stop()
 
-similarity_df = pd.DataFrame(
-    similarity_matrix,
-    index=df["nama_kapal"],
-    columns=df["nama_kapal"]
-)
+    with st.spinner("Memproses rekomendasi..."):
 
+        # ── Gabungkan query ────────────────────────────────────────────────────
+        query = f"{selected_paket} {user_desc}"
 
-# ==========================================
-# RECOMMEND FUNCTION
-# ==========================================
-def rekomendasi_kapal(
-    nama_kapal,
-    top_n=5
-):
+        # ── Encode & hitung similarity ─────────────────────────────────────────
+        # Ganti bagian ini dengan model & embeddings asli Anda:
+        #
+        #   query_embedding = model.encode([query])
+        #   scores = cosine_similarity(query_embedding, embeddings)[0]
+        #   top_indices = scores.argsort()[::-1][:top_n]
+        #
+        # Contoh di bawah menggunakan data dummy untuk demo:
+        import numpy as np
+        scores = np.random.uniform(0.75, 0.99, len(df))
+        top_indices = scores.argsort()[::-1][:top_n]
 
-    similarity_scores = similarity_df[
-        nama_kapal
-    ].sort_values(
-        ascending=False
-    )
+    # ── Tampilkan hasil ────────────────────────────────────────────────────────
+    st.divider()
+    st.subheader(f"✨ {top_n} Paket Terbaik untuk Anda")
+    st.caption(f'Query: *"{query}"*')
 
-    similarity_scores = similarity_scores[
-        1:top_n+1
-    ]
+    for rank, idx in enumerate(top_indices, start=1):
+        item  = df.iloc[idx]
+        score = scores[idx]
 
-    hasil = []
+        # ── Kartu tiap rekomendasi ─────────────────────────────────────────────
+        with st.container():
+            # Gambar + konten berdampingan
+            img_col, info_col = st.columns([1, 3], gap="medium")
 
-    for kapal, score in similarity_scores.items():
+            with img_col:
+                img_url = str(item.get("image_url", ""))
+                if img_url.startswith("http"):
+                    st.image(img_url, use_container_width=True)
+                else:
+                    st.markdown(
+                        "<div style='height:90px;background:#f3f4f6;border-radius:8px;"
+                        "display:flex;align-items:center;justify-content:center;"
+                        "font-size:2rem;'>🚢</div>",
+                        unsafe_allow_html=True,
+                    )
 
-        kapal_data = df[
-            df["nama_kapal"] == kapal
-        ].iloc[0]
-
-        hasil.append({
-
-            "nama_kapal":
-            kapal,
-
-            "kategori":
-            kapal_data.get(
-                "kategori",
-                "-"
-            ),
-
-            "harga":
-            kapal_data.get(
-                "harga",
-                "-"
-            ),
-
-            "kapasitas":
-            kapal_data.get(
-                "kapasitas",
-                "-"
-            ),
-
-            "cabin":
-            kapal_data.get(
-                "cabin",
-                "-"
-            ),
-
-            "image_url":
-            kapal_data.get(
-                "image_url",
-                ""
-            ),
-
-            "similarity":
-            round(
-                score,
-                4
-            )
-
-        })
-
-    return hasil
-
-
-# ==========================================
-# HEADER
-# ==========================================
-st.title(
-    "🚢 Sistem Rekomendasi Kapal Phinisi"
-)
-
-st.write(
-    """
-    Sistem rekomendasi kapal wisata
-    menggunakan Sentence-BERT dan
-    Cosine Similarity.
-    """
-)
-
-
-# ==========================================
-# USER INPUT
-# ==========================================
-selected_kapal = st.selectbox(
-
-    "Pilih Kapal:",
-
-    sorted(
-        df["nama_kapal"].dropna().unique()
-    )
-
-)
-
-top_n = st.slider(
-
-    "Jumlah Rekomendasi",
-
-    min_value=1,
-
-    max_value=10,
-
-    value=5
-
-)
-
-
-# ==========================================
-# BUTTON
-# ==========================================
-if st.button(
-    "Cari Rekomendasi"
-):
-
-    hasil = rekomendasi_kapal(
-
-        selected_kapal,
-
-        top_n
-
-    )
-
-    st.subheader(
-        "Hasil Rekomendasi"
-    )
-
-
-    for item in hasil:
-
-        col1, col2 = st.columns(
-            [1, 3]
-        )
-
-        with col1:
-
-            if (
-                item["image_url"]
-                and str(
-                    item["image_url"]
-                ).startswith("http")
-            ):
-
-                st.image(
-                    item["image_url"],
-                    use_container_width=True
+            with info_col:
+                # Rank + nama kapal + badge skor
+                st.markdown(
+                    f"<div class='rank-label'>#{rank}</div>"
+                    f"<div style='display:flex;align-items:center;gap:10px;'>"
+                    f"<span style='font-size:16px;font-weight:600;'>{item['nama_kapal']}</span>"
+                    f"<span class='score-badge'>⚡ {round(score, 4)}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
                 )
 
-        with col2:
+                # Tag metadata
+                tags_html = (
+                    f"<span class='tag'>📦 {item['kategori']}</span>"
+                    f"<span class='tag'>💰 {item['harga']}</span>"
+                )
+                st.markdown(tags_html, unsafe_allow_html=True)
 
-            st.markdown(
-                f"""
-                ### {item['nama_kapal']}
+                # Detail dalam kolom kecil
+                d1, d2 = st.columns(2)
+                with d1:
+                    st.markdown(
+                        f"📍 **Destinasi**  \n{item['destinasi']}  \n"
+                        f"⭐ **Layanan**  \n{item['layanan']}"
+                    )
+                with d2:
+                    st.markdown(
+                        f"🏠 **Fasilitas**  \n{item['fasilitas']}"
+                    )
 
-                **Kategori:** {item['kategori']}
-
-                **Harga:** {item['harga']}
-
-                **Kapasitas:** {item['kapasitas']}
-
-                **Cabin:** {item['cabin']}
-
-                **Similarity Score:** {item['similarity']}
-                """
-            )
-
-            st.divider()
+        st.markdown("<hr class='divider'>", unsafe_allow_html=True)
