@@ -9,7 +9,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # PAGE CONFIG
 # ==========================================
 st.set_page_config(
-    page_title="Rekomendasi Wisata Phinisi",
+    page_title="Rekomendasi Paket Wisata Phinisi",
     page_icon="🚢",
     layout="wide"
 )
@@ -44,48 +44,209 @@ def load_model():
 
 
 # ==========================================
-# CREATE EMBEDDING
-# ==========================================
-@st.cache_resource
-def create_embeddings(
-    data,
-    model
-):
-
-    texts = data[
-        "processed_text"
-    ].fillna("").astype(str).tolist()
-
-    embeddings = model.encode(
-        texts
-    )
-
-    return embeddings
-
-
-# ==========================================
-# LOAD
+# LOAD OBJECT
 # ==========================================
 df = load_data()
 
 model = load_model()
 
-embeddings = create_embeddings(
-    df,
-    model
-)
+
+# ==========================================
+# CREATE EMBEDDING
+# ==========================================
+@st.cache_resource
+def create_embeddings():
+
+    texts = df[
+        "processed_text"
+    ].fillna("").astype(str).tolist()
+
+    embeddings = model.encode(
+        texts,
+        show_progress_bar=False
+    )
+
+    return embeddings
+
+
+embeddings = create_embeddings()
 
 
 # ==========================================
-# HEADER
+# EVALUATION METRICS
+# ==========================================
+def precision_at_k(
+    relevant_items,
+    recommended_items,
+    k
+):
+
+    recommended_k = recommended_items[:k]
+
+    hit_count = len(
+        set(
+            recommended_k
+        ).intersection(
+            set(
+                relevant_items
+            )
+        )
+    )
+
+    return hit_count / k
+
+
+def recall_at_k(
+    relevant_items,
+    recommended_items,
+    k
+):
+
+    if len(
+        relevant_items
+    ) == 0:
+
+        return 0
+
+
+    recommended_k = recommended_items[:k]
+
+    hit_count = len(
+        set(
+            recommended_k
+        ).intersection(
+            set(
+                relevant_items
+            )
+        )
+    )
+
+    return hit_count / len(
+        relevant_items
+    )
+
+
+def average_precision_at_k(
+    relevant_items,
+    recommended_items,
+    k
+):
+
+    score = 0
+
+    hit_count = 0
+
+    recommended_k = recommended_items[:k]
+
+
+    for i, item in enumerate(
+
+        recommended_k,
+
+        start=1
+
+    ):
+
+        if item in relevant_items:
+
+            hit_count += 1
+
+            score += (
+                hit_count / i
+            )
+
+
+    if hit_count == 0:
+
+        return 0
+
+
+    return score / min(
+
+        len(
+            relevant_items
+        ),
+
+        k
+
+    )
+
+
+def evaluate_model(
+    selected_category,
+    recommended_items,
+    k
+):
+
+    relevant_items = df[
+        df[
+            "kategori"
+        ] == selected_category
+    ][
+        "nama_kapal"
+    ].tolist()
+
+
+    precision = precision_at_k(
+
+        relevant_items,
+
+        recommended_items,
+
+        k
+
+    )
+
+
+    recall = recall_at_k(
+
+        relevant_items,
+
+        recommended_items,
+
+        k
+
+    )
+
+
+    map_score = average_precision_at_k(
+
+        relevant_items,
+
+        recommended_items,
+
+        k
+
+    )
+
+
+    return (
+
+        precision,
+
+        recall,
+
+        map_score
+
+    )
+
+
+# ==========================================
+# UI HEADER
 # ==========================================
 st.title(
     "🚢 Sistem Rekomendasi Paket Wisata Phinisi"
 )
 
 st.write(
-    "Cari paket wisata berdasarkan jenis trip dan deskripsi perjalanan."
+    """
+    Cari paket wisata terbaik
+    berdasarkan jenis trip
+    dan kebutuhan perjalanan Anda.
+    """
 )
+
+st.divider()
 
 
 # ==========================================
@@ -94,6 +255,7 @@ st.write(
 col1, col2 = st.columns(
     2
 )
+
 
 with col1:
 
@@ -124,7 +286,7 @@ with col2:
 
     top_n = st.slider(
 
-        "Jumlah Rekomendasi",
+        "Top Recommendation",
 
         1,
 
@@ -139,7 +301,12 @@ user_desc = st.text_area(
 
     "Deskripsikan kebutuhan perjalanan",
 
-    placeholder="Contoh: snorkeling, spa, chef pribadi, honeymoon, sunset dinner"
+    placeholder="""
+Contoh:
+private trip dengan snorkeling,
+jacuzzi, spa, sunset dinner,
+chef pribadi
+"""
 
 )
 
@@ -148,23 +315,29 @@ user_desc = st.text_area(
 # SEARCH
 # ==========================================
 if st.button(
-    "Cari Rekomendasi"
+    "🔍 Cari Rekomendasi"
 ):
 
     if user_desc.strip() == "":
 
         st.warning(
-            "Masukkan deskripsi perjalanan."
+            "Silakan isi deskripsi perjalanan."
         )
 
         st.stop()
 
 
-    # query user
+    # ======================================
+    # USER QUERY
+    # ======================================
     query = (
+
         selected_paket
+
         + " " +
+
         user_desc
+
     )
 
 
@@ -180,30 +353,135 @@ if st.button(
     # COSINE SIMILARITY
     # ======================================
     scores = cosine_similarity(
+
         query_embedding,
+
         embeddings
+
     )[0]
 
 
+    # ======================================
+    # RANKING
+    # ======================================
     top_indices = scores.argsort()[
         ::-1
-    ][:top_n]
+    ][
+        :top_n
+    ]
 
 
     # ======================================
-    # OUTPUT
+    # LIST RECOMMENDED
+    # ======================================
+    recommended_names = []
+
+
+    for idx in top_indices:
+
+        kapal_name = df.iloc[
+            idx
+        ][
+            "nama_kapal"
+        ]
+
+
+        recommended_names.append(
+            kapal_name
+        )
+
+
+    # ======================================
+    # EVALUATION
+    # ======================================
+    precision, recall, map_score = evaluate_model(
+
+        selected_paket,
+
+        recommended_names,
+
+        top_n
+
+    )
+
+
+    # ======================================
+    # SHOW METRICS
     # ======================================
     st.subheader(
-        "Paket Terbaik Untuk Anda"
+        "📊 Evaluasi Model"
+    )
+
+
+    m1, m2, m3 = st.columns(
+        3
+    )
+
+
+    with m1:
+
+        st.metric(
+
+            "Precision",
+
+            round(
+                precision,
+                4
+            )
+
+        )
+
+
+    with m2:
+
+        st.metric(
+
+            "Recall",
+
+            round(
+                recall,
+                4
+            )
+
+        )
+
+
+    with m3:
+
+        st.metric(
+
+            "MAP",
+
+            round(
+                map_score,
+                4
+            )
+
+        )
+
+
+    st.divider()
+
+
+    # ======================================
+    # SHOW RECOMMENDATION
+    # ======================================
+    st.subheader(
+        "✨ Paket Terbaik Untuk Anda"
     )
 
 
     for rank, idx in enumerate(
+
         top_indices,
+
         start=1
+
     ):
 
-        item = df.iloc[idx]
+        item = df.iloc[
+            idx
+        ]
 
 
         col_img, col_info = st.columns(
@@ -211,30 +489,45 @@ if st.button(
         )
 
 
+        # ==============================
+        # IMAGE
+        # ==============================
         with col_img:
 
             img_url = str(
+
                 item.get(
+
                     "image_url",
+
                     ""
+
                 )
+
             )
+
 
             if img_url.startswith(
                 "http"
             ):
 
                 st.image(
+
                     img_url,
+
                     use_container_width=True
+
                 )
 
 
+        # ==============================
+        # INFO
+        # ==============================
         with col_info:
 
             st.markdown(
                 f"""
-                ### #{rank} {item['nama_kapal']}
+                ## #{rank} {item.get('nama_kapal','-')}
 
                 **Kategori:** {item.get('kategori','-')}
 
@@ -242,11 +535,13 @@ if st.button(
 
                 **Destinasi:** {item.get('destinasi','-')}
 
-                **Layanan:** {item.get('layanan','-')}
+                **Cabin:** {item.get('cabin','-')}
 
                 **Fasilitas:** {item.get('fasilitas','-')}
 
-                **Skor Kecocokan:** {round(scores[idx],4)}
+                **Layanan:** {item.get('layanan','-')}
+
+                **Similarity Score:** {round(scores[idx],4)}
                 """
             )
 
